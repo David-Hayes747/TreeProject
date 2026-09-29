@@ -1,0 +1,19 @@
+# Dataset
+data/raw/
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Python virtual environment
+.venv/
+venv/
