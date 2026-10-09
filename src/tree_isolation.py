@@ -2,7 +2,7 @@
 
 import numpy as np
 from pathlib import Path
-from dataset import TreeDataset
+from .dataset import TreeDataset
 
 # Add the main project folder to Python's search path
 project_dir = Path("..").resolve()
@@ -190,12 +190,3 @@ def treeIso(treeName):
 
 
 
-import matplotlib.pyplot as plt
-
-test = treeIso("R01N03")
-
-plt.figure(figsize=(8, 8))
-plt.imshow(test, cmap="gray")
-plt.title("Isolated Tree Mask")
-plt.axis("off")
-plt.show()
