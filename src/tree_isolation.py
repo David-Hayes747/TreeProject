@@ -1,15 +1,21 @@
-# Import libraries
 
+# Import libraries
 import numpy as np
 from pathlib import Path
+from scipy.ndimage import binary_dilation
 from .dataset import TreeDataset
 
 # Add the main project folder to Python's search path
-project_dir = Path("..").resolve()
+project_dir = Path(__file__).resolve().parent.parent
 
 
-
-def treeIso(treeName):
+def treeIso(
+    treeName,
+    depth_threshold=120,
+    colour_threshold=18,
+    dilation_iterations=5,
+    ground_threshold=0.7
+):
     # Dataset location
     data_dir = project_dir / "data/raw/Dataset (With Summer GT)"
 
@@ -21,13 +27,17 @@ def treeIso(treeName):
     depth = tree.winter_depth[:, :, 0]
     rgb = tree.winter_rgb
 
-    depth_threshold = 120
+    # --------------------------------------------------
+    # DEPTH THRESHOLD
+    # --------------------------------------------------
+
     tree_mask = depth > depth_threshold
 
     tree_depth_values = depth[tree_mask]
 
     tree_depth = np.zeros_like(depth)
     tree_depth[tree_mask] = depth[tree_mask]
+
     # Find all non-zero pixels
     binary_tree = tree_depth > 0
 
@@ -77,30 +87,45 @@ def treeIso(treeName):
                 groups.append(group)
 
     # Find largest connected group
-    largest_group = max(groups, key=len)
+    if groups:
+        largest_group = max(groups, key=len)
 
-    print("Number of groups:", len(groups))
-    print("Size of largest group:", len(largest_group))
+        # Create mask for largest group
+        main_tree_mask = np.zeros(binary_tree.shape, dtype=bool)
 
-    # Create mask for largest group
-    main_tree_mask = np.zeros(binary_tree.shape, dtype=bool)
-    print("main_tree_mask")
+        for row, col in largest_group:
+            main_tree_mask[row, col] = True
 
-    for row, col in largest_group:
-        main_tree_mask[row, col] = True
+    else:
+        main_tree_mask = np.zeros(binary_tree.shape, dtype=bool)
 
     # Keep depth values only for main tree
     main_tree_depth = np.where(main_tree_mask, depth, 0)
 
+    # --------------------------------------------------
+    # COLOUR THRESHOLD
+    # --------------------------------------------------
+
     R = rgb[:, :, 0]
     G = rgb[:, :, 1]
     B = rgb[:, :, 2]
-    colour_mask = (B.astype(int) - G.astype(int)) > 18
-    from scipy.ndimage import binary_dilation
-    expanded_depth = binary_dilation(tree_mask, iterations=5)
-    connected_colour = colour_mask & expanded_depth
-    combined_mask = tree_mask | connected_colour
 
+    colour_mask = (
+        B.astype(int) - G.astype(int)
+    ) > colour_threshold
+
+    # --------------------------------------------------
+    # DILATION
+    # --------------------------------------------------
+
+    expanded_depth = binary_dilation(
+        tree_mask,
+        iterations=dilation_iterations
+    )
+
+    connected_colour = colour_mask & expanded_depth
+
+    combined_mask = tree_mask | connected_colour
 
     # --------------------------------------------------
     # REMOVE GROUND
@@ -112,13 +137,13 @@ def treeIso(treeName):
     # Find the fraction of each row that is detected
     row_fraction = row_counts / combined_mask.shape[1]
 
-    # Rows where more than 70% of pixels are detected are assumed to be ground
-    ground_rows = row_fraction > 0.70
+    # Rows where more than the ground threshold
+    # are detected are assumed to be ground
+    ground_rows = row_fraction > ground_threshold
 
-    # Copy the combined mask and remove the ground rows
+    # Copy the combined mask and remove ground rows
     ground_removed = combined_mask.copy()
     ground_removed[ground_rows, :] = False
-
 
     # --------------------------------------------------
     # FIND CONNECTED GROUPS
@@ -171,22 +196,18 @@ def treeIso(treeName):
 
                 groups.append(group)
 
-
     # --------------------------------------------------
     # KEEP LARGEST CONNECTED GROUP
     # --------------------------------------------------
 
-    largest_group = max(groups, key=len)
-
     # Create an empty mask
     main_tree_mask = np.zeros(binary_tree.shape, dtype=bool)
 
-    # Add the largest group to the mask
-    for row, col in largest_group:
-        main_tree_mask[row, col] = True
-    print(main_tree_mask[row,col])
+    if groups:
+        largest_group = max(groups, key=len)
+
+        # Add the largest group to the mask
+        for row, col in largest_group:
+            main_tree_mask[row, col] = True
+
     return main_tree_mask
-
-
-
-
